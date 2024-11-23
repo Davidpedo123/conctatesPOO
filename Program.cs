@@ -6,7 +6,7 @@ namespace ContactApp
 {
     public static class Database
     {
-        private static readonly string ConnectionString = "Host=localhost;Port=5431;Username=postgres;Password=daviddev;Database=concacte";
+        private static readonly string ConnectionString = "Host={host};Port={port};Username={username};Password={password};Database={db}";
 
         public static NpgsqlConnection GetConnection()
         {
