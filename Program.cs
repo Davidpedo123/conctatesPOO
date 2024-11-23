@@ -1,173 +1,207 @@
-﻿
-class Contact
+﻿//Se usando postgres como base de datos
+using Npgsql; 
+
+
+namespace ContactApp
 {
-    public int Id { get; set; }
-    public string Name { get; set; }
-    public string LastName { get; set; }
-    public string Address { get; set; }
-    public string Telephone { get; set; }
-    public string Email { get; set; }
-    public int Age { get; set; }
-    public bool IsBestFriend { get; set; }
-}
-
-class ContactManager
-{
-    private List<Contact> contacts = new List<Contact>();
-    private int nextId = 1;
-
-    public void AddContact()
+    public static class Database
     {
-        var contact = new Contact();
+        private static readonly string ConnectionString = "Host=localhost;Port=5431;Username=postgres;Password=daviddev;Database=concacte";
 
-        contact.Id = nextId++;
-        Console.WriteLine("Digite el nombre de la persona");
-        contact.Name = Console.ReadLine();
-        Console.WriteLine("Digite el apellido de la persona");
-        contact.LastName = Console.ReadLine();
-        Console.WriteLine("Digite la dirección");
-        contact.Address = Console.ReadLine();
-        Console.WriteLine("Digite el telefono de la persona");
-        contact.Telephone = Console.ReadLine();
-        Console.WriteLine("Digite el email de la persona");
-        contact.Email = Console.ReadLine();
-        Console.WriteLine("Digite la edad de la persona en números");
-        contact.Age = Convert.ToInt32(Console.ReadLine());
-        Console.WriteLine("Especifique si es mejor amigo: 1. Si, 2. No");
-        var temp = Convert.ToInt32(Console.ReadLine());
-        contact.IsBestFriend = temp == 1;
-
-        contacts.Add(contact);
-    }
-
-    public void ViewContacts()
-    {
-        Console.WriteLine($"Nombre          Apellido            Dirección           Telefono            Email           Edad            Es Mejor Amigo?");
-        Console.WriteLine($"____________________________________________________________________________________________________________________________");
-        foreach (var contact in contacts)
+        public static NpgsqlConnection GetConnection()
         {
-            string isBestFriendStr = contact.IsBestFriend ? "Si" : "No";
-            Console.WriteLine($"{contact.Name}         {contact.LastName}         {contact.Address}         {contact.Telephone}            {contact.Email}            {contact.Age}          {isBestFriendStr}");
+            var connection = new NpgsqlConnection(ConnectionString);
+            connection.Open();
+            return connection;
         }
     }
 
-    public void SearchContact()
+    public class Contact
     {
-        Console.WriteLine($"INGRESE EL NOMBRE DEL USUARIO");
-        string userSearch = Console.ReadLine();
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string Telephone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public int Age { get; set; }
+        public bool IsBestFriend { get; set; } = false;
+    }
 
-        Console.WriteLine($"Nombre          Apellido            Dirección           Telefono            Email           Edad            Es Mejor Amigo?");
-        Console.WriteLine($"____________________________________________________________________________________________________________________________");
-        foreach (var contact in contacts)
+    public class ContactManager
+    {
+        public void AddContact()
         {
-            if (contact.Name.Equals(userSearch, StringComparison.OrdinalIgnoreCase))
+            using (var connection = Database.GetConnection())
             {
-                string isBestFriendStr = contact.IsBestFriend ? "Si" : "No";
-                Console.WriteLine($"{contact.Name}         {contact.LastName}         {contact.Address}         {contact.Telephone}            {contact.Email}            {contact.Age}          {isBestFriendStr}");
+                var command = new NpgsqlCommand("INSERT INTO Contacts (Name, LastName, Address, Telephone, Email, Age, IsBestFriend) VALUES (@Name, @LastName, @Address, @Telephone, @Email, @Age, @IsBestFriend)", connection);
+
+                var contact = new Contact();
+
+                Console.Write("Nombre: ");
+                contact.Name = Console.ReadLine();
+
+                Console.Write("Apellido: ");
+                contact.LastName = Console.ReadLine();
+
+                Console.Write("Dirección: ");
+                contact.Address = Console.ReadLine();
+
+                Console.Write("Teléfono: ");
+                contact.Telephone = Console.ReadLine();
+
+                Console.Write("Email: ");
+                contact.Email = Console.ReadLine();
+
+                Console.Write("Edad: ");
+                contact.Age = Convert.ToInt32(Console.ReadLine());
+
+                Console.Write("¿Es mejor amigo? (1. Sí, 2. No): ");
+                contact.IsBestFriend = Console.ReadLine() == "1";
+
+                command.Parameters.AddWithValue("Name", contact.Name);
+                command.Parameters.AddWithValue("LastName", contact.LastName);
+                command.Parameters.AddWithValue("Address", contact.Address);
+                command.Parameters.AddWithValue("Telephone", contact.Telephone);
+                command.Parameters.AddWithValue("Email", contact.Email);
+                command.Parameters.AddWithValue("Age", contact.Age);
+                command.Parameters.AddWithValue("IsBestFriend", contact.IsBestFriend);
+
+                command.ExecuteNonQuery();
+                Console.WriteLine("Contacto agregado.");
+            }
+        }
+
+        public void ViewContacts()
+        {
+            using (var connection = Database.GetConnection())
+            {
+                var command = new NpgsqlCommand("SELECT * FROM Contacts", connection);
+                using (var reader = command.ExecuteReader())
+                {
+                    Console.WriteLine("Id | Nombre | Apellido | Dirección | Teléfono | Email | Edad | Mejor Amigo");
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"{reader["Id"]} | {reader["Name"]} | {reader["LastName"]} | {reader["Address"]} | {reader["Telephone"]} | {reader["Email"]} | {reader["Age"]} | {(reader["IsBestFriend"] as bool? == true ? "Sí" : "No")}");
+                    }
+                }
+            }
+        }
+
+        public void SearchContact()
+        {
+            Console.Write("Nombre del contacto a buscar: ");
+            string name = Console.ReadLine();
+
+            using (var connection = Database.GetConnection())
+            {
+                var command = new NpgsqlCommand("SELECT * FROM Contacts WHERE Name ILIKE @Name", connection);
+                command.Parameters.AddWithValue("Name", "%" + name + "%");
+
+                using (var reader = command.ExecuteReader())
+                {
+                    Console.WriteLine("Id | Nombre | Apellido | Dirección | Teléfono | Email | Edad | Mejor Amigo");
+                    while (reader.Read())
+                    {
+                        Console.WriteLine($"{reader["Id"]} | {reader["Name"]} | {reader["LastName"]} | {reader["Address"]} | {reader["Telephone"]} | {reader["Email"]} | {reader["Age"]} | {(reader["IsBestFriend"] as bool? == true ? "Sí" : "No")}");
+                    }
+                }
+            }
+        }
+
+        public void ModifyContact()
+        {
+            Console.Write("Teléfono del contacto a modificar: ");
+            string telephone = Console.ReadLine();
+
+            using (var connection = Database.GetConnection())
+            {
+                var command = new NpgsqlCommand("UPDATE Contacts SET Name = @Name, LastName = @LastName, Address = @Address, Email = @Email, Age = @Age, IsBestFriend = @IsBestFriend WHERE Telephone = @Telephone", connection);
+
+                Console.Write("Nuevo nombre: ");
+                string name = Console.ReadLine();
+                command.Parameters.AddWithValue("Name", name);
+
+                Console.Write("Nuevo apellido: ");
+                string lastName = Console.ReadLine();
+                command.Parameters.AddWithValue("LastName", lastName);
+
+                Console.Write("Nueva dirección: ");
+                string address = Console.ReadLine();
+                command.Parameters.AddWithValue("Address", address);
+
+                Console.Write("Nuevo email: ");
+                string email = Console.ReadLine();
+                command.Parameters.AddWithValue("Email", email);
+
+                Console.Write("Nueva edad: ");
+                int age = Convert.ToInt32(Console.ReadLine());
+                command.Parameters.AddWithValue("Age", age);
+
+                Console.Write("¿Es mejor amigo? (1. Sí, 2. No): ");
+                bool isBestFriend = Console.ReadLine() == "1";
+                command.Parameters.AddWithValue("IsBestFriend", isBestFriend);
+
+                command.Parameters.AddWithValue("Telephone", telephone);
+
+                command.ExecuteNonQuery();
+                Console.WriteLine("Contacto actualizado.");
+            }
+        }
+
+        public void DeleteContact()
+        {
+            Console.Write("Teléfono del contacto a eliminar: ");
+            string telephone = Console.ReadLine();
+
+            using (var connection = Database.GetConnection())
+            {
+                var command = new NpgsqlCommand("DELETE FROM Contacts WHERE Telephone = @Telephone", connection);
+                command.Parameters.AddWithValue("Telephone", telephone);
+
+                command.ExecuteNonQuery();
+                Console.WriteLine("Contacto eliminado.");
             }
         }
     }
 
-    public void ModifyContact()
+    public class Program
     {
-        Console.WriteLine("Digite el teléfono del contacto que desea modificar:");
-        string phoneToModify = Console.ReadLine();
-
-        var contactToModify = contacts.FirstOrDefault(c => c.Telephone == phoneToModify);
-
-        if (contactToModify != null)
+        static void Main(string[] args)
         {
-            Console.WriteLine("Digite el nuevo nombre de la persona (deje en blanco para no cambiar):");
-            string newName = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(newName)) contactToModify.Name = newName;
+            var contactManager = new ContactManager();
+            bool running = true;
 
-            Console.WriteLine("Digite el nuevo apellido de la persona (deje en blanco para no cambiar):");
-            string newLastName = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(newLastName)) contactToModify.LastName = newLastName;
-
-            Console.WriteLine("Digite la nueva dirección (deje en blanco para no cambiar):");
-            string newAddress = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(newAddress)) contactToModify.Address = newAddress;
-
-            Console.WriteLine("Digite el nuevo email (deje en blanco para no cambiar):");
-            string newEmail = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(newEmail)) contactToModify.Email = newEmail;
-
-            Console.WriteLine("Digite la nueva edad (deje en blanco para no cambiar):");
-            string ageInput = Console.ReadLine();
-            if (int.TryParse(ageInput, out int newAge)) contactToModify.Age = newAge;
-
-            Console.WriteLine("Especifique si es mejor amigo (1. Si, 2. No, deje en blanco para no cambiar):");
-            string bestFriendInput = Console.ReadLine();
-            if (!string.IsNullOrWhiteSpace(bestFriendInput))
+            while (running)
             {
-                contactToModify.IsBestFriend = bestFriendInput == "1";
-            }
+                Console.WriteLine("1. Agregar Contacto  2. Ver Contactos  3. Buscar Contacto  4. Modificar Contacto  5. Eliminar Contacto  6. Salir");
+                Console.Write("Seleccione una opción: ");
+                int option = Convert.ToInt32(Console.ReadLine());
 
-            Console.WriteLine("Contacto modificado.");
-        }
-        else
-        {
-            Console.WriteLine("No se encontró un contacto con ese teléfono digite bien.");
-        }
-    }
-
-    public void DeleteContact()
-    {
-        Console.WriteLine("Digite el teléfono del contacto que desea eliminar:");
-        string phoneToDelete = Console.ReadLine();
-
-        var contactToDelete = contacts.FirstOrDefault(c => c.Telephone == phoneToDelete);
-
-        if (contactToDelete != null)
-        {
-            contacts.Remove(contactToDelete);
-            Console.WriteLine("Contacto borrado con éxito.");
-        }
-        else
-        {
-            Console.WriteLine("No se encontró un contacto con ese teléfono.");
-        }
-    }
-}
-
-class Program
-{
-    static void Main(string[] args)
-    {
-        ContactManager contactManager = new ContactManager();
-        bool running = true;
-
-        while (running)
-        {
-            Console.WriteLine(@"1. Agregar Contacto     2. Ver Contactos    3. Buscar Contactos     4. Modificar Contacto   5. Eliminar Contacto    6. Salir");
-            Console.WriteLine("Digite el número de la opción deseada");
-
-            int typeOption = Convert.ToInt32(Console.ReadLine());
-
-            switch (typeOption)
-            {
-                case 1:
-                    contactManager.AddContact();
-                    break;
-                case 2:
-                    contactManager.ViewContacts();
-                    break;
-                case 3:
-                    contactManager.SearchContact();
-                    break;
-                case 4:
-                    contactManager.ModifyContact();
-                    break;
-                case 5:
-                    contactManager.DeleteContact();
-                    break;
-                case 6:
-                    running = false;
-                    break;
-                default:
-                    Console.WriteLine("Opción inválida.");
-                    break;
+                switch (option)
+                {
+                    case 1:
+                        contactManager.AddContact();
+                        break;
+                    case 2:
+                        contactManager.ViewContacts();
+                        break;
+                    case 3:
+                        contactManager.SearchContact();
+                        break;
+                    case 4:
+                        contactManager.ModifyContact();
+                        break;
+                    case 5:
+                        contactManager.DeleteContact();
+                        break;
+                    case 6:
+                        running = false;
+                        break;
+                    default:
+                        Console.WriteLine("Opción inválida.");
+                        break;
+                }
             }
         }
     }
